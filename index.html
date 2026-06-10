@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+  <title>LEVI</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="theme-color" content="#000000">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #111111;
+      --accent: #0055aa;
+      --border: #e0e0e0;
+      --muted: #777777;
+    }
+    [data-theme="dark"] {
+      --bg: #131313;
+      --fg: #f5f5f5;
+      --accent: #4488ff;
+      --border: #2a2a2a;
+      --muted: #aaaaaa;
+    }
+    body {
+      margin: 0;
+      padding: calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 40px);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 0.5rem;
+    }
+    .btn {
+      display: inline-block;
+      border: none;
+      border-radius: 4px;
+      padding: 12px 16px;
+      font-size: 1.1rem;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      text-align: center;
+      transition: transform 0.2s ease;
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Stato registrazione: leggera animazione pulsante */
+    .btn.recording {
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    .section {
+      margin-top: 24px;
+    }
+    .quest-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .quest-item {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      /* transizioni per animazioni leggere */
+      transition: background 0.2s ease, opacity 0.2s ease;
+    }
+    .quest-item span {
+      flex: 1;
+      padding-right: 10px;
+    }
+    .quest-item button {
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    #transcript, #suggestions {
+      margin-top: 16px;
+      font-size: 0.95rem;
+      transition: opacity 0.5s ease;
+    }
+
+    /* classe per dissolvenza */
+    #transcript.fade-out, #suggestions.fade-out {
+      opacity: 0;
+    }
+    .crocette {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .crocette button {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      background: var(--bg);
+      color: var(--fg);
+      /* transizione fluida per stato attivo/inattivo */
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .crocette button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .footer-actions {
+      margin-top: 32px;
+      display: flex;
+      gap: 10px;
+    }
+    .footer-actions button,
+    .footer-actions label {
+      flex: 1;
+      display: block;
+      font-size: 0.85rem;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--fg);
+      text-align: center;
+      cursor: pointer;
+    }
+    .footer-actions input[type="file"] {
+      display: none;
+    }
+
+    /* Testo introduttivo più leggero */
+    .intro {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>LEVI</h1>
+  <p class="intro">Parla o scrivi per trasformare pensieri in azioni.</p>
+
+  <button id="recordBtn" class="btn">🎤 Premi per parlare</button>
+  <textarea id="textInput" placeholder="Digita qui se preferisci" rows="2" style="width:100%; margin-top:12px; font-size:1rem; padding:8px; border-radius:4px; border:1px solid var(--border);"></textarea>
+  <button id="submitText" class="btn" style="width:100%; margin-top:8px;">Aggiungi</button>
+
+  <div id="transcript"></div>
+  <div id="suggestions"></div>
+
+  <div class="section" id="questsSection">
+    <h2>Quest attive</h2>
+    <ul class="quest-list" id="questList"></ul>
+    <p id="noQuests" style="color:var(--muted);">Nessuna quest attiva</p>
+  </div>
+
+  <div class="section">
+    <h2>Oggi</h2>
+    <div class="crocette" id="crocette"></div>
+  </div>
+
+  <div class="section">
+    <h2>Storico</h2>
+    <div id="history"></div>
+  </div>
+
+  <div class="footer-actions">
+    <button id="exportBtn">Esporta dati</button>
+    <label for="importInput">Importa dati</label>
+    <input type="file" id="importInput" accept="application/json">
+    <button id="notifBtn">Notifiche</button>
+  </div>
+
+  <script>
+  (() => {
+    const STATE_KEY = 'levi-state';
+    let state = null;
+    const MAX_QUESTS = 3;
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(STATE_KEY);
+        state = raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        state = null;
+      }
+      if (!state) {
+        state = {
+          quests: [],
+          history: {},
+          crocette: { corpo: false, mossa: false, lucidita: false },
+          notificationsEnabled: false
+        };
+      } else {
+        // assicura che il campo notificationsEnabled esista
+        if (state.notificationsEnabled === undefined) state.notificationsEnabled = false;
+        if (!state.crocette) state.crocette = { corpo: false, mossa: false, lucidita: false };
+      }
+      render();
+    }
+    function save() {
+      try {
+        localStorage.setItem(STATE_KEY, JSON.stringify(state));
+      } catch (e) {
+        console.warn('Errore salvataggio', e);
+      }
+    }
+    // Utility per ottenere data ISO (giorno)
+    function today() {
+      const d = new Date();
+      d.setHours(0,0,0,0);
+      return d.toISOString().split('T')[0];
+    }
+    // Gestione crocette
+    function toggleCrocetta(key) {
+      state.crocette[key] = !state.crocette[key];
+      save();
+      renderCrocette();
+    }
+    function renderCrocette() {
+      const cElem = document.getElementById('crocette');
+      cElem.innerHTML = '';
+      const items = [
+        { key:'corpo', label:'Corpo' },
+        { key:'mossa', label:'Mossa' },
+        { key:'lucidita', label:'Lucidità' }
+      ];
+      items.forEach(item => {
+        const btn = document.createElement('button');
+        btn.textContent = item.label;
+        if (state.crocette[item.key]) btn.classList.add('active');
+        btn.addEventListener('click', () => toggleCrocetta(item.key));
+        cElem.appendChild(btn);
+      });
+    }
+    // Gestione quest
+    function addQuest(text) {
+      if (state.quests.length >= MAX_QUESTS) {
+        alert('Hai già 3 quest attive. Completa o archivia prima di aggiungerne altre.');
+        return;
+      }
+      const id = Date.now();
+      state.quests.push({ id, text, created: today() });
+      save();
+      renderQuests();
+      // vibrazione leggera
+      if (navigator.vibrate) navigator.vibrate(50);
+      // notifica locale
+      if (state.notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Nuova quest', { body: text });
+      }
+    }
+    function completeQuest(id) {
+      state.quests = state.quests.filter(q => q.id !== id);
+      save();
+      renderQuests();
+      if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+      // notifica locale su completamento
+      if (state.notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Quest completata', { body: 'Ben fatto!' });
+      }
+    }
+    function renderQuests() {
+      const list = document.getElementById('questList');
+      list.innerHTML = '';
+      if (!state.quests.length) {
+        document.getElementById('noQuests').style.display = 'block';
+      } else {
+        document.getElementById('noQuests').style.display = 'none';
+      }
+      state.quests.forEach(q => {
+        const li = document.createElement('li');
+        li.className = 'quest-item';
+        const span = document.createElement('span');
+        span.textContent = q.text;
+        li.appendChild(span);
+        // Pulsante condividi se supportato
+        if (navigator.share) {
+          const shareBtn = document.createElement('button');
+          shareBtn.textContent = 'Condividi';
+          shareBtn.addEventListener('click', () => {
+            navigator.share({
+              title: 'Quest LEVI',
+              text: q.text
+            }).catch(() => {
+              // se l’utente annulla, non fare nulla
+            });
+          });
+          li.appendChild(shareBtn);
+        }
+        // Pulsante completa
+        const btn = document.createElement('button');
+        btn.textContent = 'Completa';
+        btn.addEventListener('click', () => completeQuest(q.id));
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+    }
+    // Gestione storico
+    function addToHistory(entry) {
+      const d = today();
+      if (!state.history[d]) state.history[d] = [];
+      state.history[d].push(entry);
+    }
+    function renderHistory() {
+      const hElem = document.getElementById('history');
+      hElem.innerHTML = '';
+      const days = Object.keys(state.history).sort().reverse();
+      if (!days.length) {
+        hElem.textContent = 'Nessun storico.';
+        return;
+      }
+      days.forEach(day => {
+        const dayDiv = document.createElement('div');
+        const header = document.createElement('h3');
+        const date = new Date(day + 'T00:00');
+        header.textContent = date.toLocaleDateString('it-IT',{ weekday:'short', day:'numeric', month:'short' });
+        dayDiv.appendChild(header);
+        const ul = document.createElement('ul');
+        ul.style.listStyle = 'disc';
+        ul.style.paddingLeft = '18px';
+        state.history[day].forEach(ent => {
+          const li = document.createElement('li');
+          li.textContent = ent;
+          ul.appendChild(li);
+        });
+        dayDiv.appendChild(ul);
+        hElem.appendChild(dayDiv);
+      });
+    }
+    // Parsing input: classificazione senza "devo"
+    function classifyAndAdd(text) {
+      const clean = text.trim();
+      if (!clean) return;
+      // salva sempre nello storico
+      addToHistory(clean);
+      const lower = clean.toLowerCase();
+      const suggestionsEl = document.getElementById('suggestions');
+      // Se contiene verbi di azione → quest, altrimenti nota (solo storico)
+      if (/(fare|voglio|vorrei)/.test(lower)) {
+        addQuest(clean);
+        suggestionsEl.textContent = '• Quest aggiunta';
+      } else if (/(sto per|rischio)/.test(lower)) {
+        // trattiamo rischi come quest per ricordare l’intenzione
+        addQuest(clean);
+        suggestionsEl.textContent = '• Quest (rischio) aggiunta';
+      } else {
+        // nient’altro: resta solo nello storico
+        suggestionsEl.textContent = '• Nota salvata';
+      }
+      save();
+      renderHistory();
+      // pulisci campo testo
+      document.getElementById('textInput').value = '';
+      // resetta dissolvenza dei messaggi e programma dissolvenza dopo alcuni secondi
+      const transcriptEl = document.getElementById('transcript');
+      // rimuovi classe fade-out per mostrarli immediatamente
+      transcriptEl.classList.remove('fade-out');
+      suggestionsEl.classList.remove('fade-out');
+      // cancella timer precedente
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(() => {
+        transcriptEl.classList.add('fade-out');
+        suggestionsEl.classList.add('fade-out');
+      }, 4000);
+    }
+    // Riconoscimento vocale
+    let recognition = null;
+    // Timer per dissolvenza di transcript e suggestions
+    let fadeTimer = null;
+    function initSpeech() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        return null;
+      }
+      const recog = new SpeechRecognition();
+      recog.lang = 'it-IT';
+      recog.interimResults = false;
+      recog.maxAlternatives = 1;
+      // avvia animazione al pulsante in fase di registrazione
+      recog.onstart = () => {
+        const btn = document.getElementById('recordBtn');
+        if (btn) btn.classList.add('recording');
+      };
+      recog.onresult = e => {
+        const text = e.results[0][0].transcript;
+        // Mostra l’input riconosciuto con poche parole
+        document.getElementById('transcript').textContent = '→ ' + text;
+        classifyAndAdd(text);
+      };
+      recog.onerror = e => {
+        document.getElementById('transcript').textContent = 'Errore riconoscimento: ' + e.error;
+      };
+      recog.onend = () => {
+        const btn = document.getElementById('recordBtn');
+        if (btn) btn.classList.remove('recording');
+      };
+      return recog;
+    }
+    // Gestione export
+    function exportData() {
+      const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
+      const timestamp = new Date().toISOString().split('T')[0];
+      const fileName = `levi-backup-${timestamp}.json`;
+      // se la Web Share API con file è supportata, usa share
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: 'application/json' })] })) {
+        const file = new File([blob], fileName, { type: 'application/json' });
+        navigator.share({
+          files: [file],
+          title: 'Backup LEVI',
+          text: 'Ecco il mio backup LEVI'
+        }).catch(() => {
+          // se l’utente annulla, non fare nulla
+        });
+        return;
+      }
+      // fallback: download del file
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    // Gestione import
+    function importData(file) {
+      const reader = new FileReader();
+      reader.onload = evt => {
+        try {
+          const data = JSON.parse(evt.target.result);
+          if (data && typeof data === 'object') {
+            state = data;
+            save();
+            load();
+          }
+        } catch (e) {
+          alert('File non valido');
+        }
+      };
+      reader.readAsText(file);
+    }
+    // Render
+    function render() {
+      renderCrocette();
+      renderQuests();
+      renderHistory();
+    }
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      load();
+      recognition = initSpeech();
+      const recordBtn = document.getElementById('recordBtn');
+      recordBtn.addEventListener('click', () => {
+        if (!recognition) {
+          alert('Riconoscimento vocale non supportato');
+          return;
+        }
+        document.getElementById('transcript').textContent = 'Ascolto...';
+        recognition.start();
+      });
+      document.getElementById('submitText').addEventListener('click', () => {
+        const val = document.getElementById('textInput').value;
+        classifyAndAdd(val);
+      });
+      document.getElementById('exportBtn').addEventListener('click', exportData);
+      document.getElementById('importInput').addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (file) importData(file);
+      });
+      // Gestione notifiche
+      const notifBtn = document.getElementById('notifBtn');
+      notifBtn.addEventListener('click', () => {
+        // Richiesta permesso notifiche
+        if (!('Notification' in window)) {
+          alert('Le notifiche non sono supportate dal browser.');
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          alert('Hai negato le notifiche. Abilita dalle impostazioni del browser.');
+          return;
+        }
+        if (Notification.permission === 'granted') {
+          // Attiva/disattiva
+          state.notificationsEnabled = !state.notificationsEnabled;
+          save();
+          notifBtn.textContent = state.notificationsEnabled ? 'Notifiche ✓' : 'Notifiche';
+          return;
+        }
+        // chiede permesso
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            state.notificationsEnabled = true;
+            save();
+            notifBtn.textContent = 'Notifiche ✓';
+            // notifica test
+            new Notification('Notifiche abilitate', { body: 'Ora riceverai avvisi per le tue quest.' });
+          }
+        });
+      });
+      // Imposta stato pulsante notifiche al load
+      const initialNotifBtn = document.getElementById('notifBtn');
+      if (state.notificationsEnabled) initialNotifBtn.textContent = 'Notifiche ✓';
+
+      // Richiede persistenza dello storage per evitare che il browser cancelli i dati
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().then(granted => {
+          // possiamo eventualmente mostrare un messaggio per diagnosi
+          console.log('Persistenza storage', granted ? 'concessa' : 'negata');
+        });
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
