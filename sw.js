@@ -4,13 +4,14 @@
 */
 
 // incrementa il nome della cache per forzare l'aggiornamento dopo modifiche
-const CACHE_NAME = 'levi-cache-v2';
+const CACHE_NAME = 'levi-cache-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png'
+  , './icons/icon-180.png'
 ];
 
 self.addEventListener('install', event => {

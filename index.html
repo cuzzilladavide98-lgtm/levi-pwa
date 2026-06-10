@@ -5,7 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
   <title>LEVI</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <!-- iOS: abilita modalità app a schermo intero e definisce stile della barra di stato -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LEVI">
+  <!-- Icona touch per iOS -->
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
   <meta name="theme-color" content="#000000">
   <style>
     /* Tema scuro di default ispirato all’estetica della bussola Apple */
@@ -95,14 +101,28 @@
     }
     .quest-item {
       border: 1px solid var(--border);
-      border-radius: 4px;
+      border-radius: 8px;
       padding: 10px;
       margin-bottom: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       /* transizioni per animazioni leggere */
-      transition: background 0.2s ease, opacity 0.2s ease;
+      transition: background 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .quest-item:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* Animazione per le quest appena aggiunte */
+    .quest-item.new {
+      animation: fadeInScale 0.3s ease;
+    }
+
+    @keyframes fadeInScale {
+      0% { opacity: 0; transform: scale(0.95); }
+      100% { opacity: 1; transform: scale(1); }
     }
     .quest-item span {
       flex: 1;
@@ -149,12 +169,13 @@
 
     /* Carta effetto vetro per sezioni */
     .glass {
-      backdrop-filter: blur(10px);
-      background: rgba(255,255,255,0.05);
+      /* effetto vetro più marcato */
+      backdrop-filter: blur(12px);
+      background: rgba(255,255,255,0.08);
       border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 12px;
+      border-radius: 16px;
       padding: 16px;
-      margin-top: 16px;
+      margin-top: 20px;
     }
     #transcript, #suggestions {
       margin-top: 16px;
@@ -173,10 +194,10 @@
     }
     .crocette button {
       flex: 1;
-      padding: 8px;
+      padding: 10px;
       border: 1px solid var(--border);
       border-radius: 4px;
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       cursor: pointer;
       background: var(--bg);
       color: var(--fg);
@@ -186,6 +207,12 @@
     .crocette button.active {
       background: var(--accent);
       color: #fff;
+    }
+
+    .crocette-help {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 4px;
     }
 
     /* Allineamento testo data scadenza accanto all'icona calendario */
@@ -248,6 +275,30 @@
       <button id="classQuest" class="btn" style="flex:1;">Quest</button>
       <button id="classNote" class="btn" style="flex:1;">Nota</button>
       <button id="classDiscard" class="btn" style="flex:1;">Scarta</button>
+      <!-- Nuovo pulsante per dividere il testo in più quest -->
+      <button id="classSplit" class="btn" style="flex:1; display:none;">Dividi</button>
+    </div>
+  </div>
+
+  <!-- Editor per impostare o modificare la data di scadenza e la ripetizione -->
+  <div id="dueEditor" class="glass" style="display:none; margin-top:16px;">
+    <p id="dueEditorTitle" style="margin-bottom:8px; font-size:1rem;">Imposta scadenza</p>
+    <div style="margin-bottom:8px;">
+      <label for="dueInput" style="display:block; margin-bottom:4px; font-size:0.85rem;">Data e ora</label>
+      <input id="dueInput" type="datetime-local" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border); background: var(--bg); color: var(--fg);">
+    </div>
+    <div style="margin-bottom:8px;">
+      <label for="repeatSelect" style="display:block; margin-bottom:4px; font-size:0.85rem;">Ripeti</label>
+      <select id="repeatSelect" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--border); background: var(--bg); color: var(--fg);">
+        <option value="">Nessuna ripetizione</option>
+        <option value="quotidiana">Quotidiana</option>
+        <option value="settimanale">Settimanale</option>
+        <option value="mensile">Mensile</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button id="saveDue" class="btn" style="flex:1;">Salva</button>
+      <button id="cancelDue" class="btn" style="flex:1;">Annulla</button>
     </div>
   </div>
 
@@ -257,9 +308,19 @@
     <p id="noQuests" style="color:var(--muted);">Nessuna quest attiva</p>
   </div>
 
+  <!-- Routine quotidiana -->
   <div class="glass">
-    <h2 style="margin-top:0;">Oggi</h2>
+    <h2 style="margin-top:0;">Routine</h2>
+    <!-- breve descrizione della routine quotidiana -->
+    <p class="crocette-help" style="margin-top:0;">Segna se oggi hai nutrito il corpo, fatto una mossa utile e mantenuto la lucidità.</p>
     <div class="crocette" id="crocette"></div>
+  </div>
+
+  <!-- Scadenze odierne -->
+  <div class="glass" id="dueTodaySection">
+    <h2 style="margin-top:0;">Scadenze oggi</h2>
+    <ul class="quest-list" id="dueTodayList"></ul>
+    <p id="noDueToday" style="color:var(--muted);">Nessuna quest in scadenza oggi</p>
   </div>
 
   <div class="glass">
@@ -386,14 +447,16 @@
       });
     }
     // Gestione quest
-    function addQuest(text) {
+    function addQuest(text, dueISO = null) {
       if (state.quests.length >= MAX_QUESTS) {
         alert('Hai già 3 quest attive. Completa o archivia prima di aggiungerne altre.');
         return;
       }
       const id = Date.now();
       // nuova quest: repeat null indica nessuna ripetizione
-      state.quests.push({ id, text, created: today(), priority: false, due: null, repeat: null });
+      state.quests.push({ id, text, created: today(), priority: false, due: dueISO, repeat: null });
+      // memorizza quest appena aggiunta per animazione
+      lastAddedId = id;
       save();
       renderQuests();
       // vibrazione leggera
@@ -442,42 +505,105 @@
       }
     }
 
-    // Modifica o imposta la data/ora di scadenza di una quest
+    // Analizza il testo per dedurre automaticamente una data di scadenza (heuristica)
+    function parseDueFromText(text) {
+      if (!text) return null;
+      const lower = text.toLowerCase();
+      const now = new Date();
+      let targetDate;
+      // Determina il giorno: oggi o domani
+      if (lower.includes('domani')) {
+        targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      } else {
+        targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      }
+      let hour = null;
+      // Pomeriggio / mattina / sera
+      if (/(stasera|questa\ssera|serata)/i.test(lower)) {
+        hour = 21;
+      }
+      if (/(mattina|domattina|mattino)/i.test(lower)) {
+        hour = 9;
+      }
+      if (/pomeriggio/.test(lower)) {
+        hour = 15;
+      }
+      // Se include solo "sera" (non "stasera")
+      if (!hour && /\bsera\b/.test(lower)) {
+        hour = 21;
+      }
+      // Parole generiche "oggi" / "domani" ma senza orario
+      if (!hour && lower.includes('domani')) {
+        hour = 12; // mezzogiorno per domani
+      }
+      // Ricerca di un orario numerico
+      const timeMatch = lower.match(/\b(?:alle\s*|ore\s*)(\d{1,2})\b/);
+      if (timeMatch) {
+        const h = parseInt(timeMatch[1]);
+        if (!isNaN(h) && h >= 0 && h <= 23) {
+          hour = h;
+        }
+      }
+      if (hour == null) {
+        return null;
+      }
+      const dueDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, 0, 0);
+      return dueDate.toISOString();
+    }
+
+    // Mostra il pannello per modificare data/ora e ripetizione di una quest
     function editDueDate(id) {
+      openDueEditor(id);
+    }
+
+    // Apri l'editor di scadenza e precompila con i valori esistenti
+    function openDueEditor(id) {
+      editingDueId = id;
       const q = state.quests.find(q => q.id === id);
       if (!q) return;
-      // Valore corrente per precompilare
-      const current = q.due ? q.due.slice(0,16) : '';
-      const val = prompt('Inserisci data e ora (formato YYYY-MM-DDTHH:mm). Lascia vuoto per rimuovere la scadenza:', current);
-      if (val === null) return;
-      const trimmed = val.trim();
-      if (trimmed === '') {
-        q.due = null;
-        q.repeat = null;
+      const dueInput = document.getElementById('dueInput');
+      const repeatSelect = document.getElementById('repeatSelect');
+      if (q.due) {
+        // rimuove secondi e millisecondi per compatibilità con datetime-local
+        dueInput.value = q.due.slice(0,16);
       } else {
-        const dt = new Date(trimmed);
+        dueInput.value = '';
+      }
+      repeatSelect.value = q.repeat || '';
+      document.getElementById('dueEditor').style.display = 'block';
+    }
+
+    // Salva le modifiche della scadenza
+    function saveDue() {
+      if (editingDueId === null) {
+        document.getElementById('dueEditor').style.display = 'none';
+        return;
+      }
+      const q = state.quests.find(q => q.id === editingDueId);
+      if (!q) return;
+      const dueVal = document.getElementById('dueInput').value;
+      const repeatVal = document.getElementById('repeatSelect').value;
+      if (dueVal.trim() !== '') {
+        const dt = new Date(dueVal);
         if (isNaN(dt.valueOf())) {
-          alert('Formato non valido. Usa YYYY-MM-DDTHH:mm');
+          alert('Formato non valido');
           return;
         }
         q.due = dt.toISOString();
-        // chiedi se l'utente vuole ripetere la quest
-        const rep = prompt('Ripetizione? (nessuna, quotidiana, settimanale, mensile)', q.repeat || 'nessuna');
-        if (rep === null) {
-          // non modificare la ripetizione
-        } else {
-          const choice = rep.trim().toLowerCase();
-          if (!choice || choice === 'nessuna') {
-            q.repeat = null;
-          } else if (choice === 'quotidiana' || choice === 'settimanale' || choice === 'mensile') {
-            q.repeat = choice;
-          } else {
-            alert('Ripetizione non valida. Usa una tra nessuna, quotidiana, settimanale, mensile');
-          }
-        }
+      } else {
+        q.due = null;
       }
+      q.repeat = repeatVal ? repeatVal : null;
       save();
-      renderQuests();
+      editingDueId = null;
+      document.getElementById('dueEditor').style.display = 'none';
+      render();
+    }
+
+    // Annulla modifiche scadenza
+    function cancelDue() {
+      editingDueId = null;
+      document.getElementById('dueEditor').style.display = 'none';
     }
     function renderQuests() {
       const list = document.getElementById('questList');
@@ -504,6 +630,12 @@
       quests.forEach(q => {
         const li = document.createElement('li');
         li.className = 'quest-item';
+        // applica classe "new" se appena aggiunta
+        if (q.id === lastAddedId) {
+          li.classList.add('new');
+          // rimuovi il riferimento dopo un breve lasso di tempo per evitare che persista per sempre
+          setTimeout(() => { if (lastAddedId === q.id) lastAddedId = null; }, 500);
+        }
         const leftWrapper = document.createElement('div');
         leftWrapper.style.display = 'flex';
         leftWrapper.style.alignItems = 'center';
@@ -555,8 +687,94 @@
         delBtn.title = 'Elimina';
         delBtn.addEventListener('click', () => deleteQuest(q.id));
         li.appendChild(delBtn);
+
+        // Pulsante per esportare la quest come file .ics (calendario)
+        const icsBtn = document.createElement('button');
+        icsBtn.textContent = 'ICS';
+        icsBtn.title = 'Aggiungi al calendario';
+        icsBtn.addEventListener('click', () => exportQuestToICS(q.id));
+        li.appendChild(icsBtn);
         list.appendChild(li);
       });
+    }
+
+    // Mostra le quest in scadenza oggi
+    function renderDueToday() {
+      const list = document.getElementById('dueTodayList');
+      const noMsg = document.getElementById('noDueToday');
+      if (!list || !noMsg) return;
+      // Filtra quest con scadenza oggi
+      const todayDate = new Date();
+      // Normalizza data (solo giorno, mese, anno)
+      const tasks = state.quests.filter(q => {
+        if (!q.due) return false;
+        const due = new Date(q.due);
+        return due.getFullYear() === todayDate.getFullYear() && due.getMonth() === todayDate.getMonth() && due.getDate() === todayDate.getDate();
+      });
+      list.innerHTML = '';
+      if (!tasks.length) {
+        noMsg.style.display = 'block';
+      } else {
+        noMsg.style.display = 'none';
+        // Ordina per orario
+        tasks.sort((a,b) => new Date(a.due) - new Date(b.due));
+        tasks.forEach(q => {
+          const li = document.createElement('li');
+          li.className = 'quest-item';
+          const leftWrapper = document.createElement('div');
+          leftWrapper.style.display = 'flex';
+          leftWrapper.style.alignItems = 'center';
+          // Star
+          const starBtn = document.createElement('button');
+          starBtn.className = 'star-btn' + (q.priority ? ' priority' : '');
+          starBtn.innerHTML = svgIcon('star', 20);
+          starBtn.title = q.priority ? 'Rimuovi priorità' : 'Segna come priorità';
+          starBtn.addEventListener('click', () => togglePriority(q.id));
+          leftWrapper.appendChild(starBtn);
+          const span = document.createElement('span');
+          span.textContent = q.text;
+          leftWrapper.appendChild(span);
+          li.appendChild(leftWrapper);
+          // Condivisione
+          if (navigator.share) {
+            const shareBtn = document.createElement('button');
+            shareBtn.innerHTML = svgIcon('share', 18);
+            shareBtn.title = 'Condividi';
+            shareBtn.addEventListener('click', () => {
+              navigator.share({ title: 'Quest LEVI', text: q.text }).catch(() => {});
+            });
+            li.appendChild(shareBtn);
+          }
+          // Completa
+          const completeBtn = document.createElement('button');
+          completeBtn.innerHTML = svgIcon('check', 18);
+          completeBtn.title = 'Completa';
+          completeBtn.addEventListener('click', () => completeQuest(q.id));
+          li.appendChild(completeBtn);
+          // Scadenza (modifica) con data
+          const dueBtn = document.createElement('button');
+          const dueLabel = formatDue(q.due);
+          dueBtn.innerHTML = svgIcon('calendar', 18) + (dueLabel ? ` <span class="due-text">${dueLabel}${q.repeat ? ' 🔁' : ''}</span>` : '');
+          dueBtn.title = 'Modifica scadenza';
+          dueBtn.addEventListener('click', () => editDueDate(q.id));
+          li.appendChild(dueBtn);
+          // Elimina
+          const delBtn = document.createElement('button');
+          delBtn.className = 'delete-btn';
+          delBtn.innerHTML = svgIcon('xmark', 18);
+          delBtn.title = 'Elimina';
+          delBtn.addEventListener('click', () => deleteQuest(q.id));
+          li.appendChild(delBtn);
+
+          // Esporta come file .ics per calendario
+          const icsBtn = document.createElement('button');
+          icsBtn.textContent = 'ICS';
+          icsBtn.title = 'Aggiungi al calendario';
+          icsBtn.addEventListener('click', () => exportQuestToICS(q.id));
+          li.appendChild(icsBtn);
+          list.appendChild(li);
+        });
+      }
     }
     // Gestione storico
     function addToHistory(entry) {
@@ -643,6 +861,13 @@
       document.getElementById('transcript').classList.remove('fade-out');
       suggestionsEl.classList.remove('fade-out');
       clearTimeout(fadeTimer);
+
+      // Verifica se il testo contiene più parti separabili (punteggiatura forte, nuove linee o connettori comuni)
+      const hasMultiple = /[;.\n]|\b(?:e|poi)\b/i.test(clean);
+      const splitBtn = document.getElementById('classSplit');
+      if (splitBtn) {
+        splitBtn.style.display = hasMultiple ? 'block' : 'none';
+      }
     }
     // Commit della classificazione in base alla scelta dell’utente
     function commitClassification(type) {
@@ -652,10 +877,16 @@
       // se non c’è pendingText, esci
       if (!pendingText) return;
       if (type === 'quest') {
-        // aggiungi sempre a storico e come quest
+        // calcola data di scadenza automatica, se esiste
+        const autoDue = parseDueFromText(pendingText);
+        // aggiungi sempre a storico e come quest con eventuale scadenza
         addToHistory(pendingText);
-        addQuest(pendingText);
-        suggestionsEl.textContent = '• Quest aggiunta';
+        addQuest(pendingText, autoDue);
+        if (autoDue) {
+          suggestionsEl.textContent = '• Quest aggiunta con scadenza ' + formatDue(autoDue);
+        } else {
+          suggestionsEl.textContent = '• Quest aggiunta';
+        }
       } else if (type === 'note') {
         // aggiungi solo nello storico
         addToHistory(pendingText);
@@ -678,8 +909,53 @@
         suggestionsEl.classList.add('fade-out');
       }, 4000);
     }
+
+    // Divide il testo pending in più quest separate e le aggiunge (fino a esaurimento slot)
+    function splitPendingText() {
+      const classifyContainer = document.getElementById('classifyContainer');
+      classifyContainer.style.display = 'none';
+      if (!pendingText) return;
+      // Usa vari separatori: punto, punto e virgola, punto esclamativo, punto interrogativo, nuova linea, " e ", " poi "
+      const parts = pendingText.split(/(?:[\.;!?\n]+|\b(?:e|poi)\b)/i)
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+      if (parts.length < 2) {
+        alert('Non ci sono parti da dividere.');
+        return;
+      }
+      let added = 0;
+      const available = MAX_QUESTS - state.quests.length;
+      parts.forEach((p, idx) => {
+        if (added >= available) return;
+        addToHistory(p);
+        const autoDue = parseDueFromText(p);
+        addQuest(p, autoDue);
+        added++;
+      });
+      const suggestionsEl = document.getElementById('suggestions');
+      if (added > 0) {
+        suggestionsEl.textContent = `• Aggiunte ${added} quest`;
+      } else {
+        suggestionsEl.textContent = '• Non è stato possibile aggiungere altre quest (massimo 3)';
+      }
+      pendingText = '';
+      save();
+      renderHistory();
+      document.getElementById('textInput').value = '';
+      // Dissolvenza messaggi
+      const transcriptEl = document.getElementById('transcript');
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(() => {
+        transcriptEl.classList.add('fade-out');
+        suggestionsEl.classList.add('fade-out');
+      }, 4000);
+    }
     // Riconoscimento vocale
     let recognition = null;
+    // ID della quest attualmente in fase di modifica scadenza
+    let editingDueId = null;
+    // ID dell'ultima quest appena aggiunta (usato per animazione)
+    let lastAddedId = null;
     // Timer per dissolvenza di transcript e suggestions
     let fadeTimer = null;
     function initSpeech() {
@@ -737,6 +1013,38 @@
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
+
+    // Esporta una singola quest come file .ics per l'aggiunta al calendario di sistema
+    function exportQuestToICS(id) {
+      const q = state.quests.find(q => q.id === id);
+      if (!q) {
+        alert('Quest non trovata');
+        return;
+      }
+      if (!q.due) {
+        alert('Questa quest non ha una scadenza da esportare');
+        return;
+      }
+      const start = new Date(q.due);
+      // Imposta la durata di default a 1 ora
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      function formatICSDate(date) {
+        // Rimuove caratteri non accettati e aggiunge Z per indicare l'UTC
+        return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      }
+      const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//LEVI//IT\nBEGIN:VEVENT\nUID:${q.id}@levi\nDTSTAMP:${formatICSDate(new Date())}\nDTSTART:${formatICSDate(start)}\nDTEND:${formatICSDate(end)}\nSUMMARY:${q.text}\nEND:VEVENT\nEND:VCALENDAR`;
+      const blob = new Blob([ics], { type: 'text/calendar' });
+      const safeName = q.text.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0,50) || 'event';
+      const fileName = `${safeName}.ics`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
     // Gestione import
     function importData(file) {
       const reader = new FileReader();
@@ -758,6 +1066,7 @@
     function render() {
       renderCrocette();
       renderQuests();
+      renderDueToday();
       renderHistory();
     }
 
@@ -784,8 +1093,14 @@
         recIconSpan.innerHTML = svgIcon('microphone', 48, '#000');
       }
       recordBtn.addEventListener('click', () => {
+      if (!recognition) {
+        // Se il riconoscimento vocale non è disponibile, disabilita il pulsante e informa l’utente
+        recordBtn.disabled = true;
+        recordBtn.title = 'Riconoscimento vocale non supportato su questo dispositivo';
+      }
+      recordBtn.addEventListener('click', () => {
         if (!recognition) {
-          alert('Riconoscimento vocale non supportato');
+          alert('Il riconoscimento vocale non è disponibile. Usa il campo di testo per inserire i tuoi pensieri.');
           return;
         }
         document.getElementById('transcript').textContent = 'Ascolto...';
@@ -842,6 +1157,13 @@
       document.getElementById('classQuest').addEventListener('click', () => commitClassification('quest'));
       document.getElementById('classNote').addEventListener('click', () => commitClassification('note'));
       document.getElementById('classDiscard').addEventListener('click', () => commitClassification('discard'));
+
+      // Eventi per dividere il testo in più quest
+      document.getElementById('classSplit').addEventListener('click', splitPendingText);
+
+      // Eventi per editor scadenza
+      document.getElementById('saveDue').addEventListener('click', saveDue);
+      document.getElementById('cancelDue').addEventListener('click', cancelDue);
 
       // Richiede persistenza dello storage per evitare che il browser cancelli i dati
       if (navigator.storage && navigator.storage.persist) {
