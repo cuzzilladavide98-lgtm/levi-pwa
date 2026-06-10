@@ -4,7 +4,9 @@
 */
 
 // incrementa il nome della cache per forzare l'aggiornamento dopo modifiche
-const CACHE_NAME = 'levi-cache-v3';
+// Aggiorna questo valore ogni volta che modifichi index.html o altri asset
+// per assicurare che la PWA scarichi la nuova versione invece di usare la cache precedente.
+const CACHE_NAME = 'levi-cache-v4';
 const STATIC_ASSETS = [
   './',
   './index.html',

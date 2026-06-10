@@ -510,43 +510,49 @@
       if (!text) return null;
       const lower = text.toLowerCase();
       const now = new Date();
-      let targetDate;
-      // Determina il giorno: oggi o domani
-      if (lower.includes('domani')) {
-        targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      } else {
-        targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Determina il numero di giorni da oggi: 0 = oggi, 1 = domani, 2 = dopodomani, etc.
+      let dayOffset = 0;
+      if (/dopodomani/.test(lower)) {
+        dayOffset = 2;
+      } else if (/domani/.test(lower)) {
+        dayOffset = 1;
       }
+      // Parole chiave per fasce orarie
       let hour = null;
-      // Pomeriggio / mattina / sera
+      // Sera/stasera
       if (/(stasera|questa\ssera|serata)/i.test(lower)) {
         hour = 21;
       }
-      if (/(mattina|domattina|mattino)/i.test(lower)) {
-        hour = 9;
-      }
-      if (/pomeriggio/.test(lower)) {
-        hour = 15;
-      }
-      // Se include solo "sera" (non "stasera")
-      if (!hour && /\bsera\b/.test(lower)) {
+      // Sera generica
+      if (hour === null && /\bsera\b/.test(lower)) {
         hour = 21;
       }
-      // Parole generiche "oggi" / "domani" ma senza orario
-      if (!hour && lower.includes('domani')) {
-        hour = 12; // mezzogiorno per domani
+      // Mattina/domattina/mattino
+      if (hour === null && /(mattina|domattina|mattino)/i.test(lower)) {
+        hour = 9;
       }
-      // Ricerca di un orario numerico
-      const timeMatch = lower.match(/\b(?:alle\s*|ore\s*)(\d{1,2})\b/);
+      // Pomeriggio
+      if (hour === null && /pomeriggio/.test(lower)) {
+        hour = 15;
+      }
+      // Se la frase contiene "sera" dopo aver riconosciuto un orario, mantieni quell'orario.
+      // Casi generici: se si menziona domani ma senza specificare orario, proponi mezzogiorno
+      if (hour === null && dayOffset > 0) {
+        hour = 12;
+      }
+      // Ricerca di un orario numerico (es. "alle 18" o "ore 9"). Accetta anche formati con due punti.
+      const timeMatch = lower.match(/\b(?:alle\s*|ore\s*)(\d{1,2})(?:[:\.](\d{1,2}))?\b/);
       if (timeMatch) {
         const h = parseInt(timeMatch[1]);
         if (!isNaN(h) && h >= 0 && h <= 23) {
           hour = h;
         }
       }
+      // Se non siamo riusciti a determinare un'ora, ritorna null (nessuna scadenza suggerita)
       if (hour == null) {
         return null;
       }
+      const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
       const dueDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hour, 0, 0);
       return dueDate.toISOString();
     }
@@ -868,6 +874,17 @@
       if (splitBtn) {
         splitBtn.style.display = hasMultiple ? 'block' : 'none';
       }
+      // Aggiorna lo stato del pulsante Quest in base al numero di quest attive
+      const questBtn = document.getElementById('classQuest');
+      if (questBtn) {
+        if (state.quests.length >= MAX_QUESTS) {
+          questBtn.disabled = true;
+          questBtn.textContent = 'Limite raggiunto';
+        } else {
+          questBtn.disabled = false;
+          questBtn.textContent = 'Quest';
+        }
+      }
     }
     // Commit della classificazione in base alla scelta dell’utente
     function commitClassification(type) {
@@ -1092,24 +1109,25 @@
       if (recIconSpan) {
         recIconSpan.innerHTML = svgIcon('microphone', 48, '#000');
       }
-      recordBtn.addEventListener('click', () => {
+      // Configura pulsante microfono: abilita o disabilita in base alla presenza del riconoscimento vocale
       if (!recognition) {
-        // Se il riconoscimento vocale non è disponibile, disabilita il pulsante e informa l’utente
+        // Riconoscimento vocale non supportato: disattiva il pulsante e imposta titolo
         recordBtn.disabled = true;
         recordBtn.title = 'Riconoscimento vocale non supportato su questo dispositivo';
+      } else {
+        // Se supportato, avvia la registrazione al clic
+        recordBtn.addEventListener('click', () => {
+          document.getElementById('transcript').textContent = 'Ascolto...';
+          recognition.start();
+        });
       }
-      recordBtn.addEventListener('click', () => {
-        if (!recognition) {
-          alert('Il riconoscimento vocale non è disponibile. Usa il campo di testo per inserire i tuoi pensieri.');
-          return;
-        }
-        document.getElementById('transcript').textContent = 'Ascolto...';
-        recognition.start();
-      });
+
+      // Gestione input testuale: aggiungi classificazione al click
       document.getElementById('submitText').addEventListener('click', () => {
         const val = document.getElementById('textInput').value;
         showClassification(val);
       });
+
       document.getElementById('exportBtn').addEventListener('click', exportData);
       document.getElementById('importInput').addEventListener('change', e => {
         const file = e.target.files[0];
