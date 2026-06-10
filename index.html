@@ -39,18 +39,36 @@
     .btn {
       display: inline-block;
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       padding: 12px 16px;
-      font-size: 1.1rem;
+      font-size: 1rem;
       background: var(--accent);
       color: #fff;
       cursor: pointer;
       text-align: center;
-      transition: transform 0.2s ease;
+      transition: transform 0.15s ease;
     }
     .btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+
+    /* Bottone microfono grande e circolare */
+    .mic-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      font-size: 2rem;
+      background: var(--accent);
+      color: #fff;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      border: none;
+      transition: transform 0.2s ease;
+    }
+    .mic-btn.recording {
+      animation: pulse 1.6s infinite;
     }
 
     /* Stato registrazione: leggera animazione pulsante */
@@ -94,6 +112,27 @@
       font-size: 0.8rem;
       cursor: pointer;
       margin-left: 4px;
+    }
+
+    /* Pulsanti speciali per star e delete nelle quest */
+    .quest-item .star-btn {
+      background: none;
+      color: var(--accent);
+      font-size: 1.2rem;
+      border: none;
+      cursor: pointer;
+      margin-right: 6px;
+    }
+    .quest-item .star-btn.priority {
+      color: #f1c40f;
+    }
+    .quest-item .delete-btn {
+      background: none;
+      color: var(--muted);
+      font-size: 1.2rem;
+      border: none;
+      cursor: pointer;
+      margin-left: 6px;
     }
     #transcript, #suggestions {
       margin-top: 16px;
@@ -160,12 +199,27 @@
   <h1>LEVI</h1>
   <p class="intro">Parla o scrivi per trasformare pensieri in azioni.</p>
 
-  <button id="recordBtn" class="btn">🎤 Premi per parlare</button>
-  <textarea id="textInput" placeholder="Digita qui se preferisci" rows="2" style="width:100%; margin-top:12px; font-size:1rem; padding:8px; border-radius:4px; border:1px solid var(--border);"></textarea>
+  <!-- Contenitore microfono: un grande pulsante circolare al centro -->
+  <div style="text-align:center; margin-top:16px;">
+    <button id="recordBtn" class="mic-btn">🎤</button>
+  </div>
+  <!-- Campo testo opzionale -->
+  <textarea id="textInput" placeholder="Digita qui se preferisci" rows="2" style="width:100%; margin-top:20px; font-size:1rem; padding:8px; border-radius:4px; border:1px solid var(--border);"></textarea>
   <button id="submitText" class="btn" style="width:100%; margin-top:8px;">Aggiungi</button>
 
-  <div id="transcript"></div>
+  <!-- Mostra testo riconosciuto -->
+  <div id="transcript" style="margin-top:12px; font-weight:bold;"></div>
   <div id="suggestions"></div>
+
+  <!-- Contenitore per la scelta di classificazione -->
+  <div id="classifyContainer" style="display:none; margin-top:16px;">
+    <p id="classifyText" style="margin-bottom:8px; font-size:1rem;"></p>
+    <div style="display:flex; gap:8px;">
+      <button id="classQuest" class="btn" style="flex:1;">Quest</button>
+      <button id="classNote" class="btn" style="flex:1;">Nota</button>
+      <button id="classDiscard" class="btn" style="flex:1;">Scarta</button>
+    </div>
+  </div>
 
   <div class="section" id="questsSection">
     <h2>Quest attive</h2>
@@ -214,6 +268,12 @@
         // assicura che il campo notificationsEnabled esista
         if (state.notificationsEnabled === undefined) state.notificationsEnabled = false;
         if (!state.crocette) state.crocette = { corpo: false, mossa: false, lucidita: false };
+        // assicura che ogni quest abbia il campo priority
+        if (state.quests && Array.isArray(state.quests)) {
+          state.quests.forEach(q => {
+            if (q.priority === undefined) q.priority = false;
+          });
+        }
       }
       render();
     }
@@ -259,7 +319,7 @@
         return;
       }
       const id = Date.now();
-      state.quests.push({ id, text, created: today() });
+      state.quests.push({ id, text, created: today(), priority: false });
       save();
       renderQuests();
       // vibrazione leggera
@@ -279,6 +339,23 @@
         new Notification('Quest completata', { body: 'Ben fatto!' });
       }
     }
+
+    // Elimina quest
+    function deleteQuest(id) {
+      state.quests = state.quests.filter(q => q.id !== id);
+      save();
+      renderQuests();
+    }
+
+    // Toggle priorità
+    function togglePriority(id) {
+      const q = state.quests.find(q => q.id === id);
+      if (q) {
+        q.priority = !q.priority;
+        save();
+        renderQuests();
+      }
+    }
     function renderQuests() {
       const list = document.getElementById('questList');
       list.innerHTML = '';
@@ -287,12 +364,27 @@
       } else {
         document.getElementById('noQuests').style.display = 'none';
       }
-      state.quests.forEach(q => {
+      // Ordina con priorità prima
+      const quests = state.quests.slice().sort((a,b) => {
+        if (a.priority === b.priority) return 0;
+        return a.priority ? -1 : 1;
+      });
+      quests.forEach(q => {
         const li = document.createElement('li');
         li.className = 'quest-item';
+        const leftWrapper = document.createElement('div');
+        leftWrapper.style.display = 'flex';
+        leftWrapper.style.alignItems = 'center';
+        // Star per priorità
+        const starBtn = document.createElement('button');
+        starBtn.className = 'star-btn' + (q.priority ? ' priority' : '');
+        starBtn.innerHTML = q.priority ? '★' : '☆';
+        starBtn.addEventListener('click', () => togglePriority(q.id));
+        leftWrapper.appendChild(starBtn);
         const span = document.createElement('span');
         span.textContent = q.text;
-        li.appendChild(span);
+        leftWrapper.appendChild(span);
+        li.appendChild(leftWrapper);
         // Pulsante condividi se supportato
         if (navigator.share) {
           const shareBtn = document.createElement('button');
@@ -308,10 +400,16 @@
           li.appendChild(shareBtn);
         }
         // Pulsante completa
-        const btn = document.createElement('button');
-        btn.textContent = 'Completa';
-        btn.addEventListener('click', () => completeQuest(q.id));
-        li.appendChild(btn);
+        const completeBtn = document.createElement('button');
+        completeBtn.textContent = 'Completa';
+        completeBtn.addEventListener('click', () => completeQuest(q.id));
+        li.appendChild(completeBtn);
+        // Pulsante elimina
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.textContent = '✕';
+        delBtn.addEventListener('click', () => deleteQuest(q.id));
+        li.appendChild(delBtn);
         list.appendChild(li);
       });
     }
@@ -348,35 +446,55 @@
       });
     }
     // Parsing input: classificazione senza "devo"
-    function classifyAndAdd(text) {
+    // Variabile per memorizzare il testo in attesa di classificazione
+    let pendingText = '';
+    // Mostra il pannello di classificazione per un testo
+    function showClassification(text) {
       const clean = text.trim();
       if (!clean) return;
-      // salva sempre nello storico
-      addToHistory(clean);
-      const lower = clean.toLowerCase();
+      pendingText = clean;
+      const classifyContainer = document.getElementById('classifyContainer');
+      const classifyText = document.getElementById('classifyText');
+      classifyText.textContent = clean;
+      classifyContainer.style.display = 'block';
+      // mostra anche il transcript con freccia
+      document.getElementById('transcript').textContent = '→ ' + clean;
+      // reset messaggi
       const suggestionsEl = document.getElementById('suggestions');
-      // Se contiene verbi di azione → quest, altrimenti nota (solo storico)
-      if (/(fare|voglio|vorrei)/.test(lower)) {
-        addQuest(clean);
+      suggestionsEl.textContent = '';
+      // rimuovi eventuale dissolvenza
+      document.getElementById('transcript').classList.remove('fade-out');
+      suggestionsEl.classList.remove('fade-out');
+      clearTimeout(fadeTimer);
+    }
+    // Commit della classificazione in base alla scelta dell’utente
+    function commitClassification(type) {
+      const classifyContainer = document.getElementById('classifyContainer');
+      classifyContainer.style.display = 'none';
+      const suggestionsEl = document.getElementById('suggestions');
+      // se non c’è pendingText, esci
+      if (!pendingText) return;
+      if (type === 'quest') {
+        // aggiungi sempre a storico e come quest
+        addToHistory(pendingText);
+        addQuest(pendingText);
         suggestionsEl.textContent = '• Quest aggiunta';
-      } else if (/(sto per|rischio)/.test(lower)) {
-        // trattiamo rischi come quest per ricordare l’intenzione
-        addQuest(clean);
-        suggestionsEl.textContent = '• Quest (rischio) aggiunta';
-      } else {
-        // nient’altro: resta solo nello storico
+      } else if (type === 'note') {
+        // aggiungi solo nello storico
+        addToHistory(pendingText);
         suggestionsEl.textContent = '• Nota salvata';
+      } else if (type === 'discard') {
+        // ignora tutto
+        suggestionsEl.textContent = '• Scartato';
       }
+      // reset pending
+      pendingText = '';
       save();
       renderHistory();
-      // pulisci campo testo
+      // cancella valore textarea
       document.getElementById('textInput').value = '';
-      // resetta dissolvenza dei messaggi e programma dissolvenza dopo alcuni secondi
+      // avvia dissolvenza dei messaggi
       const transcriptEl = document.getElementById('transcript');
-      // rimuovi classe fade-out per mostrarli immediatamente
-      transcriptEl.classList.remove('fade-out');
-      suggestionsEl.classList.remove('fade-out');
-      // cancella timer precedente
       clearTimeout(fadeTimer);
       fadeTimer = setTimeout(() => {
         transcriptEl.classList.add('fade-out');
@@ -403,9 +521,8 @@
       };
       recog.onresult = e => {
         const text = e.results[0][0].transcript;
-        // Mostra l’input riconosciuto con poche parole
-        document.getElementById('transcript').textContent = '→ ' + text;
-        classifyAndAdd(text);
+        // Mostra l’input riconosciuto e chiedi classificazione
+        showClassification(text);
       };
       recog.onerror = e => {
         document.getElementById('transcript').textContent = 'Errore riconoscimento: ' + e.error;
@@ -481,7 +598,7 @@
       });
       document.getElementById('submitText').addEventListener('click', () => {
         const val = document.getElementById('textInput').value;
-        classifyAndAdd(val);
+        showClassification(val);
       });
       document.getElementById('exportBtn').addEventListener('click', exportData);
       document.getElementById('importInput').addEventListener('change', e => {
@@ -521,6 +638,11 @@
       // Imposta stato pulsante notifiche al load
       const initialNotifBtn = document.getElementById('notifBtn');
       if (state.notificationsEnabled) initialNotifBtn.textContent = 'Notifiche ✓';
+
+      // Eventi per classificazione
+      document.getElementById('classQuest').addEventListener('click', () => commitClassification('quest'));
+      document.getElementById('classNote').addEventListener('click', () => commitClassification('note'));
+      document.getElementById('classDiscard').addEventListener('click', () => commitClassification('discard'));
 
       // Richiede persistenza dello storage per evitare che il browser cancelli i dati
       if (navigator.storage && navigator.storage.persist) {
